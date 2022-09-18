@@ -1,0 +1,136 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>snakeoil.stringio &#8212; snakeoil -trunk documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/classic.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css" />
+    
+    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">snakeoil -trunk documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">snakeoil.stringio</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for snakeoil.stringio</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">StringIO functionality</span>
+
+<span class="sd">This module provides essentially two types of StringIO&#39;s, and two types of modes</span>
+<span class="sd">of operation; text versus bytes, and readonly versus writable.</span>
+
+<span class="sd">The reason for separate classes is that when we&#39;re running on py2k, if all we&#39;re</span>
+<span class="sd">doing is consuming/reading the data it&#39;s heavily preferable to use ``cStringIO.StringIO``</span>
+<span class="sd">if at all possible for performance reasons.  Thus we have readonly and writable</span>
+<span class="sd">classes; the separation has clear performance benefits.</span>
+
+<span class="sd">Note that while this functionality is based on StringIO and friends, there is some</span>
+<span class="sd">differences in behaviour from stdlib- stdlib&#39;s ``cStringIO.StringIO`` is</span>
+<span class="sd">pseudo-writable; it has a truncate method (which works).  This is suboptimal since</span>
+<span class="sd">the majority of consumers treat it as write only, thus in these classes we specifically</span>
+<span class="sd">raise a TypeError if you try to truncate a readonly instance.  Further, instead of</span>
+<span class="sd">just lacking `write` and `writelines` methods, we supply those (to maintain file</span>
+<span class="sd">like IO compatibility) but have them raise TypeError if invoked</span>
+
+<span class="sd">Exempting the caveats above, usage of these classes is basically no different</span>
+<span class="sd">than interacting with a normal StringIO.</span>
+
+<span class="sd">Finally note that the __slots__ layout for py2k cStringIO differs from</span>
+<span class="sd">io.BytesIO (or io.TextIO) in py3k; as such if you&#39;re deriving from a writable</span>
+<span class="sd">instance you&#39;ll need to compensate for this if you want to have source that</span>
+<span class="sd">is usable under both py2k and py3k.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="c1"># TODO: deprecated, remove in 0.9.0</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;text_readonly&#39;</span><span class="p">,</span> <span class="s1">&#39;bytes_readonly&#39;</span><span class="p">)</span>
+
+<span class="kn">import</span> <span class="nn">io</span>
+
+
+<span class="k">def</span> <span class="nf">_generic_immutable_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="si">}</span><span class="s2"> isn&#39;t opened for writing&quot;</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">_make_ro_cls</span><span class="p">(</span><span class="nb">type</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">dct</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">dct</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;write&quot;</span><span class="p">,</span> <span class="s2">&quot;writelines&quot;</span><span class="p">,</span> <span class="s2">&quot;truncate&quot;</span><span class="p">):</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">_generic_immutable_method</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">x</span>
+
+
+<div class="viewcode-block" id="text_readonly"><a class="viewcode-back" href="../../api/snakeoil.stringio.html#snakeoil.stringio.text_readonly">[docs]</a><span class="k">class</span> <span class="nc">text_readonly</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">StringIO</span><span class="p">,</span> <span class="n">metaclass</span><span class="o">=</span><span class="n">_make_ro_cls</span><span class="p">):</span>
+    <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="bytes_readonly"><a class="viewcode-back" href="../../api/snakeoil.stringio.html#snakeoil.stringio.bytes_readonly">[docs]</a><span class="k">class</span> <span class="nc">bytes_readonly</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">,</span> <span class="n">metaclass</span><span class="o">=</span><span class="n">_make_ro_cls</span><span class="p">):</span>
+    <span class="o">...</span></div>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">snakeoil -trunk documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">snakeoil.stringio</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2007-2022, snakeoil contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.1.1.
+    </div>
+  </body>
+</html>
